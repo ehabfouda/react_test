@@ -1,14 +1,53 @@
 name: Deploy Frontend
+
 on:
   push:
     branches:
-      - main
+      - main # This means the workflow will run on pushes to the 'main' branch
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # Specifies the runner environment
+
     steps:
-      - uses: actions/checkout@v2
-      - run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
-      - run: docker build -t cygnetops/react-test -f Dockerfile.dev .
-      - run: docker run -e CI=true cygnetops/react-test npm test
+      - name: Checkout code
+        uses: actions/checkout@v4 # Use the latest stable version for actions/checkout
+
+      - name: Log in to Docker Hub
+        # This is the recommended and secure way to log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+          # If you're using a specific registry other than Docker Hub, add:
+          # registry: your-private-registry.com
+
+      - name: Build Docker image (for development/testing)
+        # We'll build an image using Dockerfile.dev for testing purposes.
+        # The image tag here is temporary for local use within the workflow.
+        run: docker build -t cygnetops/react-test-temp -f Dockerfile.dev .
+
+      - name: Run Tests in Docker Container
+        # It's good practice to run tests inside the container environment
+        # that mimics your production environment.
+        run: docker run -e CI=true cygnetops/react-test-temp npm test
+
+      - name: Build Final Docker Image (for production/deployment - if tests pass)
+        # If the tests passed, you can then build your final image (e.g., from Dockerfile)
+        # and push it. This step assumes 'Dockerfile' (without .dev) is your production Dockerfile.
+        # If Dockerfile.dev is your final image, you can skip this step and just rename the tag above.
+        # For simplicity, if Dockerfile.dev is the ONLY Dockerfile, you'd just push the 'cygnetops/react-test-temp' image.
+        # Let's assume you want to push 'cygnetops/react-test'.
+        run: docker build -t cygnetops/react-test:latest -f Dockerfile . # Use your production Dockerfile here if different
+
+      - name: Push Docker image to Docker Hub
+        # This pushes the final built image to Docker Hub.
+        # This step will only run if all previous steps (including tests) were successful.
+        run: docker push cygnetops/react-test:latest
+
+      # Optional: You might want to add a deployment step here
+      # - name: Deploy to Kubernetes (example)
+      #   uses: actions/setup-kubectl@v3
+      # - run: kubectl apply -f kubernetes/deployment.yaml
+      #   env:
+      #     KUBECONFIG_FILE: ${{ secrets.KUBECONFIG }} # Assuming KUBECONFIG is a secret
